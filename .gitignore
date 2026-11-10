@@ -1,0 +1,7 @@
+.env
+server/harnessrouter.env
+.venv/
+__pycache__/
+node_modules/
+examples/python/out/
+*.cookies

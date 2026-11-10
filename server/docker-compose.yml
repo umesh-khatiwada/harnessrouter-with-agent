@@ -1,0 +1,28 @@
+# HarnessRouter Community Edition for this study project.
+#
+#   cp server/harnessrouter.env.example server/harnessrouter.env   # add your provider keys
+#   docker compose -f server/docker-compose.yml up -d
+#   docker logs -f harnessrouter          # wait for: [harnessrouter] ready on :3000
+#   open http://localhost:3000            # user: harnessrouter
+#   docker exec harnessrouter cat /data/selfhost-initial-password
+#
+# Then Console -> API Keys -> Create, and put that key in ../.env as HARNESSROUTER_API_KEY.
+services:
+  harnessrouter:
+    # Pin a release for anything real (tags: https://hub.docker.com/r/harnessrouter/harnessrouter/tags).
+    # Never 0.1.x / 0.2.0: they have no login gate.
+    image: harnessrouter/harnessrouter:latest
+    container_name: harnessrouter
+    ports:
+      # Loopback only. To expose it, put TLS + your own password in front (see the study guide).
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - harnessrouter.env
+    volumes:
+      # Database, files, secrets, installed harness CLIs and session workspaces.
+      - harnessrouter-data:/data
+    restart: unless-stopped
+    # Do not add `user:`: the runner needs root to create per-session users.
+
+volumes:
+  harnessrouter-data:
