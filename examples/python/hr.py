@@ -41,6 +41,10 @@ DEFAULT_PROFILES = {
                          "Claude Code on an Anthropic connection (its native home)"),
     "openrouter": Profile("openrouter", "hermes", "claude-sonnet-4.6",
                           "Hermes on an OpenRouter connection (one key, many vendors)"),
+    # NVIDIA is not a built-in provider: it is a "Custom" OpenAI-format integration (see README).
+    # Hermes is the one of our three harnesses that speaks that format.
+    "nvidia": Profile("nvidia", "hermes", "nemotron-3-ultra",
+                      "Hermes on a custom NVIDIA (integrate.api.nvidia.com) integration"),
 }
 
 
@@ -149,7 +153,7 @@ def describe(resp: dict) -> None:
 
 
 def args(description: str, **extra) -> argparse.Namespace:
-    """Common CLI: --provider openai|anthropic|openrouter (default from HR_PROVIDER or openai)."""
+    """Common CLI: --provider openai|anthropic|openrouter|nvidia (default from HR_PROVIDER or openai)."""
     p = argparse.ArgumentParser(description=description)
     p.add_argument("--provider", default=os.getenv("HR_PROVIDER", "openai"),
                    choices=list(DEFAULT_PROFILES))

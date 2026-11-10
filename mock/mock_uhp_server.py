@@ -2,6 +2,7 @@
 
     python mock/mock_uhp_server.py            # listens on http://localhost:8787
     # then in .env:  HARNESSROUTER_BASE_URL=http://localhost:8787  HARNESSROUTER_API_KEY=mock-key
+    # (the only key it accepts; change it with MOCK_API_KEY=...)
 
 It is NOT HarnessRouter and runs no model. It answers the same endpoints with the same JSON and
 SSE shapes (UHP 2026-10-19), and fakes an "agent" with a few canned behaviours so every example
@@ -15,6 +16,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import re
 import threading
 import time
@@ -25,12 +27,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 PORT = 8787
+MOCK_KEY = os.environ.get("MOCK_API_KEY", "mock-key")
 
 # base id -> (backend, models it can run, default model)
 BASES = {
     "codex": ("codex", ["gpt-5.4-mini", "gpt-5.5"], "gpt-5.4-mini"),
     "claude-code": ("claude", ["claude-sonnet-5", "claude-haiku-4.5", "claude-opus-5"], "claude-sonnet-5"),
-    "hermes": ("hermes", ["claude-sonnet-4.6", "gpt-5.4-mini"], "claude-sonnet-4.6"),
+    "hermes": ("hermes", ["claude-sonnet-4.6", "gpt-5.4-mini", "nemotron-3-ultra"], "claude-sonnet-4.6"),
 }
 
 LOCK = threading.RLock()
@@ -76,7 +79,7 @@ def fake_agent(text: str, sess: dict, cancel: threading.Event, emit_tool) -> tup
     written: list[str] = []
     low = text.lower()
 
-    if m := re.search(r"codeword is (\w+)", text, re.I):
+    if m := re.search(r"codeword(?:\s+is|:)\s*([A-Z][A-Z0-9_]+)", text):
         sess["codeword"] = m.group(1)
 
     if "count slowly" in low:
@@ -252,6 +255,7 @@ def new_response(body: dict) -> tuple[int, dict] | tuple[dict, dict]:
     resp = {"id": rid("resp"), "object": "response", "created_at": int(time.time()), "status": "in_progress",
             "error": None, "incomplete_details": None, "previous_response_id": prev, "model": model,
             "output": [], "store": body.get("store", True), "usage": None,
+            "connection": "mock", "served_model": model,
             "metadata": {**md, "session_id": sid, "harness_id": h["id"], "mock": True,
                          **({"ignored_fields": ignored} if ignored else {})}}
     sess["busy"] = True
@@ -285,6 +289,9 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         if not auth.startswith("Bearer ") or not auth[7:].strip():
             self.send_json(*err(401, "missing_credential", "No bearer token."))
+            return False
+        if auth[7:].strip() != MOCK_KEY:  # like the real server: a wrong key is refused
+            self.send_json(*err(401, "invalid_credential", "missing or invalid API key"))
             return False
         return True
 
@@ -352,6 +359,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.wfile.write(data)
         self.send_json(*err(404, "not_found", f"The mock does not implement GET {p}."))
 
+    # DELETE -------------------------------------------------------------------------------
+    def do_DELETE(self):
+        p = urlparse(self.path).path
+        if not self.authed():
+            return
+        with LOCK:
+            if m := re.fullmatch(r"/v1/harnesses/([^/]+)", p):
+                if HARNESSES.pop(m.group(1), None) is None:
+                    return self.send_json(*err(404, "harness_not_found", "No such harness."))
+                return self.send_json(200, {"id": m.group(1), "deleted": True})
+        self.send_json(*err(404, "not_found", f"The mock does not implement DELETE {p}."))
+
     # POST ---------------------------------------------------------------------------------
     def do_POST(self):
         p = urlparse(self.path).path
@@ -391,7 +410,7 @@ class Handler(BaseHTTPRequestHandler):
                 if key and ("h", key) in IDEMPOTENT:
                     old_hash, hid = IDEMPOTENT[("h", key)]
                     if old_hash != h_hash:
-                        return self.send_json(*err(409, "idempotency_key_reused", "Different request, same key."))
+                        return self.send_json(*err(409, "conflict", "Idempotency-Key reused with a different request payload"))
                     return self.send_json(200, harness_view(HARNESSES[hid]))
                 if body.get("base") not in BASES:
                     return self.send_json(*err(422, "unsupported_base", f"Unsupported base '{body.get('base')}'.", "base"))
@@ -422,7 +441,7 @@ class Handler(BaseHTTPRequestHandler):
             if key and ("r", key) in IDEMPOTENT:
                 old_hash, resp_id = IDEMPOTENT[("r", key)]
                 if old_hash != b_hash:
-                    return self.send_json(*err(409, "idempotency_key_reused", "Different request, same key."))
+                    return self.send_json(*err(409, "conflict", "Idempotency-Key reused with a different request payload"))
                 while RESPONSES[resp_id]["status"] == "in_progress":  # wait for the first one
                     LOCK.release()
                     time.sleep(0.1)

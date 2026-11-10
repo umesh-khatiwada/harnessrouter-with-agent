@@ -3,7 +3,7 @@
  *
  *   npm install
  *   npx tsx quickstart.ts                 # uses HR_PROVIDER from ../../.env
- *   npx tsx quickstart.ts anthropic       # or openai | openrouter
+ *   npx tsx quickstart.ts anthropic       # or openai | openrouter | nvidia
  *
  * Shows: one task, streaming the next turn of the same session, and reading the stored result.
  * Run this in your BACKEND only. The HarnessRouter key must never reach a browser.
@@ -17,6 +17,7 @@ const PROFILES = {
   openai: { harness: process.env.HR_OPENAI_HARNESS ?? "codex", model: process.env.HR_OPENAI_MODEL ?? "gpt-5.4-mini" },
   anthropic: { harness: process.env.HR_ANTHROPIC_HARNESS ?? "claude-code", model: process.env.HR_ANTHROPIC_MODEL ?? "claude-sonnet-5" },
   openrouter: { harness: process.env.HR_OPENROUTER_HARNESS ?? "hermes", model: process.env.HR_OPENROUTER_MODEL ?? "claude-sonnet-4.6" },
+  nvidia: { harness: process.env.HR_NVIDIA_HARNESS ?? "hermes", model: process.env.HR_NVIDIA_MODEL ?? "nemotron-3-ultra" },
 } as const;
 
 type Provider = keyof typeof PROFILES;

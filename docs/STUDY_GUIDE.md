@@ -89,6 +89,7 @@ Not every provider can drive every harness. The ones you care about:
 | `openai` | `codex` | `gpt-5.4-mini` | Codex only speaks the Responses format; this is its native home. |
 | `anthropic` | `claude-code` | `claude-sonnet-5` | Claude Code's native home. Prompt caching works here. |
 | `openrouter` | `hermes` | `claude-sonnet-4.6` | One key, many vendors. Also drives `codex`, and `claude-code` since 2026-10-13 via OpenRouter's Anthropic-shaped `/messages` endpoint (in the code, not yet in the docs' table or the support matrix). |
+| `custom` (NVIDIA, `openai` format) | `hermes` | not in the matrix | Any OpenAI-compatible endpoint. Set up in the Console with model rows (`nemotron-3-ultra` → `nvidia/nemotron-3-ultra-550b-a55b`) because a custom endpoint has no built-in name table. Drives Hermes, OpenCode, Pi and others, never Codex or Claude Code. |
 
 Other useful pairings from the provider table in the self-hosting guide:
 

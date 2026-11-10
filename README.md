@@ -26,14 +26,18 @@ your backend ──POST /v1/responses──▶ HarnessRouter ──▶ harness (
 | OpenAI | `codex` | `gpt-5.4-mini` | `openai` |
 | Claude | `claude-code` | `claude-sonnet-5` | `anthropic` |
 | OpenRouter | `hermes` | `claude-sonnet-4.6` | `openrouter` |
+| NVIDIA (build.nvidia.com) | `hermes` | `nemotron-3-ultra` | a **Custom** integration ([setup](#using-an-nvidia-key)) |
 
-All three pairs pass every scenario in HarnessRouter's published support matrix. Confirm what your
+The first three pairs pass every scenario in HarnessRouter's published support matrix; NVIDIA is not in it. Confirm what your
 instance can run with `python examples/python/07_custom_harness.py --list-bases`.
 
 ## Layout
 
 ```text
 docs/STUDY_GUIDE.md          the course
+docs/CURL.md                 every API call as a copy-paste curl command
+docs/TEST_RESULTS.md         latest end-to-end results (NVIDIA, 14/14)
+tests/run_tests.sh           curl + jq test suite: bash tests/run_tests.sh
 server/                      run HarnessRouter in Docker with your provider keys
   docker-compose.yml
   harnessrouter.env.example  OpenAI / Anthropic / OpenRouter connections + routing
@@ -50,6 +54,18 @@ examples/python/             one script per lesson
 examples/typescript/quickstart.ts   task + streamed follow-up with the openai npm package
 mock/mock_uhp_server.py      offline stand-in to learn the API without Docker or keys
 ```
+
+## Test it
+
+```bash
+bash tests/run_tests.sh
+```
+
+14 checks with curl + jq (auth, tasks, streaming, sessions, files, harnesses, cancel, retries,
+errors). Prints PASS/FAIL, exits with the number of failures, and writes a report to
+`tests/results/<timestamp>/`. `SHOW_CURL=1` prints each curl command; `ONLY=T05,T07` or `SKIP=T11`
+picks tests; `NVIDIA_API_KEY=...` adds a direct provider check. Latest results:
+[docs/TEST_RESULTS.md](docs/TEST_RESULTS.md).
 
 ## Run it for real
 
@@ -110,6 +126,36 @@ TypeScript:
 ```bash
 cd examples/typescript && npm install && npx tsx quickstart.ts anthropic
 ```
+
+## Using an NVIDIA key
+
+NVIDIA's API (`https://integrate.api.nvidia.com/v1`, keys start `nvapi-`) is not a built-in
+provider. Add it as a **Custom** OpenAI-format integration in the Console, not in
+`server/harnessrouter.env`: only an integration's model rows translate HarnessRouter's model name
+(`nemotron-3-ultra`) into NVIDIA's (`nvidia/nemotron-3-ultra-550b-a55b`).
+
+1. Console → account menu → **Bring your own key** → add **Custom**:
+   - **API Format**: `openai`
+   - **Endpoint URL**: `https://integrate.api.nvidia.com/v1` (leave *Use Full URL* off)
+   - **API Key**: your `nvapi-...` key
+   - **Models** (canonical → provider id):
+     - `nemotron-3-ultra` → `nvidia/nemotron-3-ultra-550b-a55b` (default here; strong agent, ~4 s/call)
+     - `nemotron-3.5-lightning` → `nvidia/nemotron-3.5-lightning-30b-a3b` (fast, ~1 s/call)
+2. Set `HR_PROVIDER=nvidia` in `.env` and run any example, e.g. `python 01_first_task.py`.
+   `HR_NVIDIA_MODEL=nemotron-3.5-lightning` switches model.
+
+What works: the **`hermes`** harness (it speaks OpenAI chat/completions). Codex needs the Responses
+API and Claude Code needs Anthropic's format, so neither runs on NVIDIA.
+
+**Which models your key can use differs per NVIDIA account.** Test one before adding it:
+
+```bash
+curl -s https://integrate.api.nvidia.com/v1/chat/completions -H "Authorization: Bearer $NVIDIA_API_KEY" -H 'Content-Type: application/json' -d '{"model":"nvidia/nemotron-3-ultra-550b-a55b","messages":[{"role":"user","content":"Reply with exactly: ok"}],"max_tokens":50}'
+```
+
+`403 Authorization failed` = the key itself is bad. `404 ... Not found for account` = the key works
+but that model isn't enabled for your account (on the account tested here, `nemotron-3-super` and
+`kimi-k2.6` were 404). A model also needs to be in Hermes's catalog (`python 07_custom_harness.py --list-bases`).
 
 ## Learn offline first (no Docker, no keys)
 

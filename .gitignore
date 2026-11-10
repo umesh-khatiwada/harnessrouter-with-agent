@@ -5,3 +5,4 @@ __pycache__/
 node_modules/
 examples/python/out/
 *.cookies
+tests/results/
